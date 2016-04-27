@@ -1,0 +1,23 @@
+plugins {
+    id 'java'
+    id 'idea'
+    // Allows running "gradle shadowJar" to shadow the runtime configuration with project code into ./build/libs/
+    id 'com.github.johnrengelman.shadow' version '1.2.3'
+}
+
+group 'example'
+version '1.0.0'
+
+sourceCompatibility = 1.8
+
+repositories {
+    jcenter()
+    maven {
+        url "https://jitpack.io"
+    }
+}
+
+dependencies {
+    compile "com.github.austinv11:Discord4j:2.4.6"
+    compile "ch.qos.logback:logback-classic:1.1.6"
+}
