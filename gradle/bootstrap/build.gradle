@@ -18,6 +18,6 @@ repositories {
 }
 
 dependencies {
-    compile "com.github.austinv11:Discord4j:2.4.7"
+    compile "com.github.austinv11:Discord4j:2.4.8"
     compile "ch.qos.logback:logback-classic:1.1.7"
 }
