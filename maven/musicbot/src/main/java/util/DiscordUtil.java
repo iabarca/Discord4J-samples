@@ -26,24 +26,21 @@ public class DiscordUtil {
         });
     }
 
-    public static CompletableFuture<RequestBuffer.RequestFuture<Boolean>> deleteMessage(IMessage message, long timeout, TimeUnit unit) {
-        return CompletableFuture.supplyAsync(() -> {
+    public static void deleteMessage(IMessage message, long timeout, TimeUnit unit) {
+        CompletableFuture.runAsync(() -> {
             try {
                 unit.sleep(timeout);
-                return RequestBuffer.request(() -> {
-                    try {
-                        message.delete();
-                        return true;
-                    } catch (MissingPermissionsException | DiscordException e) {
-                        log.warn("Failed to delete message", e);
-                    }
-                    return false;
-                });
             } catch (InterruptedException ex) {
                 log.warn("Could not perform cleanup: {}", ex.toString());
             }
+        }).thenRun(() -> RequestBuffer.request(() -> {
+            try {
+                message.delete();
+            } catch (MissingPermissionsException | DiscordException e) {
+                log.warn("Failed to delete message", e);
+            }
             return null;
-        });
+        }));
     }
 
     public static CompletableFuture<Void> processCommand(Runnable runnable) {
