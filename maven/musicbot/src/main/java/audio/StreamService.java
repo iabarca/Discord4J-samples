@@ -94,6 +94,7 @@ public class StreamService {
             Optional<String> id = extractVideoId(url);
             if (id.isPresent()) {
                 log.debug("Preparing to queue video ID: {}", id.get());
+                audioChannel.setVolume(0.2f);
                 if (queueFromYouTube(audioChannel, id.get())) {
                     IUser user = message.getAuthor();
                     sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
