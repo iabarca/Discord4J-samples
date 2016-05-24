@@ -14,11 +14,11 @@ import sx.blah.discord.util.DiscordException;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -98,12 +98,12 @@ public class StreamService {
                 if (queueFromYouTube(audioChannel, id.get())) {
                     IUser user = message.getAuthor();
                     sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
-                    deleteMessage(message, 1, TimeUnit.SECONDS);
+                    deleteMessage(message);
                 }
             } else {
                 log.debug("Could not extract valid ID from URL: {}", url);
                 sendMessage(channel, "Nothing to queue");
-                deleteMessage(message, 1, TimeUnit.SECONDS);
+                deleteMessage(message);
             }
         } catch (DiscordException e) {
             log.warn("Could not get audio channel", e);
@@ -136,6 +136,7 @@ public class StreamService {
         try {
             Process process = builder.start();
             try {
+                CompletableFuture.runAsync(() -> logStream(process.getErrorStream()));
                 audioChannel.queue(AudioSystem.getAudioInputStream(process.getInputStream()));
                 return true;
             } catch (UnsupportedAudioFileException e) {
@@ -146,6 +147,21 @@ public class StreamService {
             log.warn("Could not start process", e);
         }
         return false;
+    }
+
+    private BufferedReader newProcessReader(InputStream stream) {
+        return new BufferedReader(new InputStreamReader(stream, Charset.forName("UTF-8")));
+    }
+
+    private void logStream(InputStream stream) {
+        try (BufferedReader input = newProcessReader(stream)) {
+            String line;
+            while ((line = input.readLine()) != null) {
+                log.info("[yt-dl] " + line);
+            }
+        } catch (IOException e) {
+            log.warn("Could not read from stream", e);
+        }
     }
 
     @EventSubscriber

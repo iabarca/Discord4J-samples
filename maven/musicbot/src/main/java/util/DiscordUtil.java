@@ -26,6 +26,17 @@ public class DiscordUtil {
         });
     }
 
+    public static void deleteMessage(IMessage message) {
+        RequestBuffer.request(() -> {
+            try {
+                message.delete();
+            } catch (MissingPermissionsException | DiscordException e) {
+                log.warn("Failed to delete message", e);
+            }
+            return null;
+        });
+    }
+
     public static void deleteMessage(IMessage message, long timeout, TimeUnit unit) {
         CompletableFuture.runAsync(() -> {
             try {
