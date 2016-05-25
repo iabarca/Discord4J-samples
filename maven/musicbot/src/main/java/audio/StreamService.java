@@ -94,7 +94,6 @@ public class StreamService {
             Optional<String> id = extractVideoId(url);
             if (id.isPresent()) {
                 log.debug("Preparing to queue video ID: {}", id.get());
-                audioChannel.setVolume(0.2f);
                 if (queueFromYouTube(audioChannel, id.get())) {
                     IUser user = message.getAuthor();
                     sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
@@ -168,6 +167,7 @@ public class StreamService {
     public void onAudioPlay(AudioPlayEvent event) {
         String source = event.getFileSource().map(File::toString)
             .orElseGet(() -> event.getUrlSource().map(URL::toString).orElse(""));
+        event.getAudioChannel().setVolume(0.2f);
         AudioInputStream stream = event.getStream();
         log.debug("[Play] ({}) {}", hex(stream.hashCode()), source);
     }
