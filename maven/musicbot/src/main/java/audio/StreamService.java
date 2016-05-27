@@ -131,7 +131,7 @@ public class StreamService {
         String name = System.getProperty("os.name").contains("Windows") ? "youtube-dl.exe" : "youtube-dl";
         ProcessBuilder builder = new ProcessBuilder(name, "-q", "-f", "worstaudio",
             "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1", "-o",
-            "%(id)s", "\'" + id + "\'");
+            "%(id)s", "--", id);
         try {
             Process process = builder.start();
             try {
