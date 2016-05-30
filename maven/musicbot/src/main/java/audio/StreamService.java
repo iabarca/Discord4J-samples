@@ -17,6 +17,8 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
@@ -28,6 +30,13 @@ public class StreamService {
 
     private static final Logger log = LoggerFactory.getLogger(StreamService.class);
     private static final Pattern YOUTUBE_URL = Pattern.compile("(?:https?://)?(?:(?:(?:www\\.?)?youtube\\.com(?:/(?:(?:watch\\?.*?(v=[^&\\s]+).*)|(?:v(/.*))|(channel/.+)|(?:user/(.+))|(?:results\\?(search_query=.+))))?)|(?:youtu\\.be(/.*)?))");
+
+    private final List<String> played = new ArrayList<>();
+
+    public StreamService() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> played.stream()
+            .map(File::new).filter(File::exists).forEach(File::delete)));
+    }
 
     @EventSubscriber
     public void onMessage(MessageReceivedEvent e) {
@@ -80,7 +89,7 @@ public class StreamService {
             sendMessage(channel, "This command does not work with private messages");
             return;
         }
-        String url = content.split(" ", 2)[1];
+        String url = content.trim().split(" ", 2)[1].trim();
         if (url.isEmpty()) {
             sendMessage(channel, "You have to enter a YouTube URL");
             return;
@@ -95,13 +104,14 @@ public class StreamService {
             if (id.isPresent()) {
                 log.debug("Preparing to queue video ID: {}", id.get());
                 if (queueFromYouTube(audioChannel, id.get())) {
+                    played.add(id.get());
                     IUser user = message.getAuthor();
                     sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
                     deleteMessage(message);
                 }
             } else {
                 log.debug("Could not extract valid ID from URL: {}", url);
-                sendMessage(channel, "Nothing to queue");
+                sendMessage(channel, "Nothing to queue, something happened");
                 deleteMessage(message);
             }
         } catch (DiscordException e) {
