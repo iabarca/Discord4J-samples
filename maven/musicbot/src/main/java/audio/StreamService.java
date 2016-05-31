@@ -17,8 +17,6 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
@@ -31,22 +29,17 @@ public class StreamService {
     private static final Logger log = LoggerFactory.getLogger(StreamService.class);
     private static final Pattern YOUTUBE_URL = Pattern.compile("(?:https?://)?(?:(?:(?:www\\.?)?youtube\\.com(?:/(?:(?:watch\\?.*?(v=[^&\\s]+).*)|(?:v(/.*))|(channel/.+)|(?:user/(.+))|(?:results\\?(search_query=.+))))?)|(?:youtu\\.be(/.*)?))");
 
-    private final List<String> played = new ArrayList<>();
-
-    public StreamService() {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> played.stream()
-            .map(File::new).filter(File::exists).forEach(File::delete)));
-    }
-
     @EventSubscriber
     public void onMessage(MessageReceivedEvent e) {
         IMessage message = e.getMessage();
         String content = message.getContent();
-        if (content.startsWith("!queue ")) {
+        if (content.startsWith("!q ") || content.startsWith("!queue ")) {
             processCommand(() -> queueCommand(e));
-        } else if (content.equals("!skip")) {
+        } else if (content.startsWith("!qx ")) {
+            processCommand(() -> queueUrlCommand(e));
+        } else if (content.equals("!s") || content.equals("!skip")) {
             processCommand(() -> skipCommand(e));
-        } else if (content.startsWith("!volume ")) {
+        } else if (content.startsWith("!v ") || content.startsWith("!volume ")) {
             processCommand(() -> volumeCommand(e));
         }
     }
@@ -104,7 +97,6 @@ public class StreamService {
             if (id.isPresent()) {
                 log.debug("Preparing to queue video ID: {}", id.get());
                 if (queueFromYouTube(audioChannel, id.get())) {
-                    played.add(id.get());
                     IUser user = message.getAuthor();
                     sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
                     deleteMessage(message);
@@ -112,6 +104,37 @@ public class StreamService {
             } else {
                 log.debug("Could not extract valid ID from URL: {}", url);
                 sendMessage(channel, "Nothing to queue, something happened");
+                deleteMessage(message);
+            }
+        } catch (DiscordException e) {
+            log.warn("Could not get audio channel", e);
+            sendMessage(channel, "Could not get the audio channel for this server");
+        }
+    }
+
+    private void queueUrlCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        String content = message.getContent();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            sendMessage(channel, "This command does not work with private messages");
+            return;
+        }
+        String url = content.trim().split(" ", 2)[1].trim();
+        if (url.isEmpty()) {
+            sendMessage(channel, "You have to enter a URL");
+            return;
+        }
+        Optional<IVoiceChannel> voiceChannel = message.getAuthor().getVoiceChannel();
+        if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
+            voiceChannel.get().join();
+        }
+        try {
+            AudioChannel audioChannel = message.getGuild().getAudioChannel();
+            log.debug("Preparing to process URL into queue: {}", url);
+            if (queueFromYouTube(audioChannel, url)) {
+                IUser user = message.getAuthor();
+                sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
                 deleteMessage(message);
             }
         } catch (DiscordException e) {
@@ -140,7 +163,7 @@ public class StreamService {
     private boolean queueFromYouTube(final AudioChannel audioChannel, final String id) {
         String name = System.getProperty("os.name").contains("Windows") ? "youtube-dl.exe" : "youtube-dl";
         ProcessBuilder builder = new ProcessBuilder(name, "-q", "-f", "worstaudio",
-            "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1", "-o",
+            "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1 && rm {}", "-o",
             "%(id)s", "--", id);
         try {
             Process process = builder.start();
