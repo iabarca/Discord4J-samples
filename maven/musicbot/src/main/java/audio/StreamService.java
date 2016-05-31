@@ -17,6 +17,8 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
@@ -96,7 +98,7 @@ public class StreamService {
             Optional<String> id = extractVideoId(url);
             if (id.isPresent()) {
                 log.debug("Preparing to queue video ID: {}", id.get());
-                if (queueFromYouTube(audioChannel, id.get())) {
+                if (queueFromYouTube(audioChannel, id.get(), null)) {
                     IUser user = message.getAuthor();
                     sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
                     deleteMessage(message);
@@ -120,10 +122,18 @@ public class StreamService {
             sendMessage(channel, "This command does not work with private messages");
             return;
         }
-        String url = content.trim().split(" ", 2)[1].trim();
+        String[] args = content.trim().split(" ");
+        String url = args[1].trim();
         if (url.isEmpty()) {
             sendMessage(channel, "You have to enter a URL");
             return;
+        }
+        Map<String, String> variables = new LinkedHashMap<>();
+        if (args.length > 2) {
+            variables.put("--playlist-start", args[2]);
+        }
+        if (args.length > 3) {
+            variables.put("--playlist-end", args[3]);
         }
         Optional<IVoiceChannel> voiceChannel = message.getAuthor().getVoiceChannel();
         if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
@@ -132,7 +142,7 @@ public class StreamService {
         try {
             AudioChannel audioChannel = message.getGuild().getAudioChannel();
             log.debug("Preparing to process URL into queue: {}", url);
-            if (queueFromYouTube(audioChannel, url)) {
+            if (queueFromYouTube(audioChannel, url, variables)) {
                 IUser user = message.getAuthor();
                 sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
                 deleteMessage(message);
@@ -160,11 +170,19 @@ public class StreamService {
         return Optional.empty();
     }
 
-    private boolean queueFromYouTube(final AudioChannel audioChannel, final String id) {
+    private boolean queueFromYouTube(AudioChannel audioChannel, String id, Map<String, String> variables) {
         String name = System.getProperty("os.name").contains("Windows") ? "youtube-dl.exe" : "youtube-dl";
         ProcessBuilder builder = new ProcessBuilder(name, "-q", "-f", "worstaudio",
             "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1 && rm {}", "-o",
-            "%(id)s", "--", id);
+            "%(id)s");
+        if (variables != null) {
+            for (Map.Entry<String, String> entry : variables.entrySet()) {
+                builder.command().add(entry.getKey());
+                builder.command().add(entry.getValue());
+            }
+        }
+        builder.command().add("--");
+        builder.command().add(id);
         try {
             Process process = builder.start();
             try {
