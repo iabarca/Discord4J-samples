@@ -172,7 +172,7 @@ public class StreamService {
 
     private boolean queueFromYouTube(AudioChannel audioChannel, String id, Map<String, String> variables) {
         String name = System.getProperty("os.name").contains("Windows") ? "youtube-dl.exe" : "youtube-dl";
-        ProcessBuilder builder = new ProcessBuilder(name, "-q", "-f", "worstaudio",
+        ProcessBuilder builder = new ProcessBuilder(name, "-f", "worstaudio",
             "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1 && rm {}", "-o",
             "%(id)s");
         if (variables != null) {
