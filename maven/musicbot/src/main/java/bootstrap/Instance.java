@@ -53,6 +53,7 @@ public class Instance {
             log.debug("Registering Discord event listeners");
             client.getDispatcher().registerListener(this);
             client.getDispatcher().registerListener(new StreamService());
+            client.getDispatcher().registerListener(new ProfileListener());
         }
     }
 
