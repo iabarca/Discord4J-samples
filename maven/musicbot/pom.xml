@@ -6,7 +6,7 @@
 
     <groupId>quantic</groupId>
     <artifactId>musicbot</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 
     <properties>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -30,7 +30,7 @@
         <dependency>
             <groupId>com.github.austinv11</groupId>
             <artifactId>Discord4J</artifactId>
-            <version>2.4.9</version>
+            <version>8d0c670</version>
         </dependency>
         <!-- Allows you to log events from Discord4J -->
         <dependency>

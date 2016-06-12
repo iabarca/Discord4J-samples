@@ -2,14 +2,13 @@ package audio;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sx.blah.discord.api.EventSubscriber;
-import sx.blah.discord.handle.AudioChannel;
+import sx.blah.discord.api.events.EventSubscriber;
 import sx.blah.discord.handle.impl.events.*;
 import sx.blah.discord.handle.obj.IChannel;
 import sx.blah.discord.handle.obj.IMessage;
 import sx.blah.discord.handle.obj.IUser;
 import sx.blah.discord.handle.obj.IVoiceChannel;
-import sx.blah.discord.util.DiscordException;
+import sx.blah.discord.util.audio.AudioPlayer;
 
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -53,26 +52,18 @@ public class StreamService {
         if (message.getChannel().isPrivate()) {
             return;
         }
-        try {
-            int volume = Math.max(0, Math.min(100, parseOrDefault(content.split(" ", 2)[1], 20)));
-            AudioChannel audioChannel = message.getGuild().getAudioChannel();
-            log.debug("Setting volume to {}% ({})", volume, volume / 100f);
-            audioChannel.setVolume(volume / 100f);
-            sendMessage(channel, ":ok_hand:");
-        } catch (DiscordException e) {
-            log.warn("Could not get audio channel", e);
-            sendMessage(channel, "Could not get audio channel for this server");
-        }
+        int volume = Math.max(0, Math.min(100, parseOrDefault(content.split(" ", 2)[1], 20)));
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        log.debug("Setting volume to {}% ({})", volume, volume / 100f);
+        player.setVolume(volume / 100f);
+        sendMessage(channel, ":ok_hand:");
     }
 
     private void skipCommand(MessageReceivedEvent event) {
         IMessage message = event.getMessage();
         if (!message.getChannel().isPrivate()) {
-            try {
-                message.getGuild().getAudioChannel().skip();
-            } catch (DiscordException e) {
-                log.warn("Could not get audio channel", e);
-            }
+            AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+            player.skip();
         }
     }
 
@@ -89,28 +80,25 @@ public class StreamService {
             sendMessage(channel, "You have to enter a YouTube URL");
             return;
         }
-        Optional<IVoiceChannel> voiceChannel = message.getAuthor().getVoiceChannel();
+        Optional<IVoiceChannel> voiceChannel = message.getAuthor().getConnectedVoiceChannels()
+            .stream().filter(v -> !v.isConnected() && message.getGuild().equals(v.getGuild()))
+            .findAny();
         if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
             voiceChannel.get().join();
         }
-        try {
-            AudioChannel audioChannel = message.getGuild().getAudioChannel();
-            Optional<String> id = extractVideoId(url);
-            if (id.isPresent()) {
-                log.debug("Preparing to queue video ID: {}", id.get());
-                if (queueFromYouTube(audioChannel, id.get(), null)) {
-                    IUser user = message.getAuthor();
-                    sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
-                    deleteMessage(message);
-                }
-            } else {
-                log.debug("Could not extract valid ID from URL: {}", url);
-                sendMessage(channel, "Nothing to queue, something happened");
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        Optional<String> id = extractVideoId(url);
+        if (id.isPresent()) {
+            log.debug("Preparing to queue video ID: {}", id.get());
+            if (queueFromYouTube(player, id.get(), null)) {
+                IUser user = message.getAuthor();
+                sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
                 deleteMessage(message);
             }
-        } catch (DiscordException e) {
-            log.warn("Could not get audio channel", e);
-            sendMessage(channel, "Could not get the audio channel for this server");
+        } else {
+            log.debug("Could not extract valid ID from URL: {}", url);
+            sendMessage(channel, "Nothing to queue, something happened");
+            deleteMessage(message);
         }
     }
 
@@ -139,17 +127,12 @@ public class StreamService {
         if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
             voiceChannel.get().join();
         }
-        try {
-            AudioChannel audioChannel = message.getGuild().getAudioChannel();
-            log.debug("Preparing to process URL into queue: {}", url);
-            if (queueFromYouTube(audioChannel, url, variables)) {
-                IUser user = message.getAuthor();
-                sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
-                deleteMessage(message);
-            }
-        } catch (DiscordException e) {
-            log.warn("Could not get audio channel", e);
-            sendMessage(channel, "Could not get the audio channel for this server");
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        log.debug("Preparing to process URL into queue: {}", url);
+        if (queueFromYouTube(player, url, variables)) {
+            IUser user = message.getAuthor();
+            sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
+            deleteMessage(message);
         }
     }
 
@@ -170,7 +153,7 @@ public class StreamService {
         return Optional.empty();
     }
 
-    private boolean queueFromYouTube(AudioChannel audioChannel, String id, Map<String, String> variables) {
+    private boolean queueFromYouTube(AudioPlayer audioPlayer, String id, Map<String, String> variables) {
         String name = System.getProperty("os.name").contains("Windows") ? "youtube-dl.exe" : "youtube-dl";
         ProcessBuilder builder = new ProcessBuilder(name, "-q", "-f", "worstaudio",
             "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1", "-o",
@@ -187,7 +170,7 @@ public class StreamService {
             Process process = builder.start();
             try {
                 CompletableFuture.runAsync(() -> logStream(process.getErrorStream()));
-                audioChannel.queue(AudioSystem.getAudioInputStream(process.getInputStream()));
+                audioPlayer.queue(AudioSystem.getAudioInputStream(process.getInputStream()));
                 return true;
             } catch (UnsupportedAudioFileException e) {
                 log.warn("Could not queue audio", e);
