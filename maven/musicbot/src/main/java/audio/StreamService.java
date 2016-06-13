@@ -3,26 +3,29 @@ package audio;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sx.blah.discord.api.events.EventSubscriber;
-import sx.blah.discord.handle.impl.events.*;
+import sx.blah.discord.handle.impl.events.MessageReceivedEvent;
 import sx.blah.discord.handle.obj.IChannel;
 import sx.blah.discord.handle.obj.IMessage;
 import sx.blah.discord.handle.obj.IUser;
 import sx.blah.discord.handle.obj.IVoiceChannel;
 import sx.blah.discord.util.audio.AudioPlayer;
+import sx.blah.discord.util.audio.events.*;
 
-import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
-import java.net.URL;
 import java.nio.charset.Charset;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import static util.DateUtil.formatDuration;
+import static util.DateUtil.formatHuman;
 import static util.DiscordUtil.*;
 
 public class StreamService {
@@ -33,7 +36,7 @@ public class StreamService {
     @EventSubscriber
     public void onMessage(MessageReceivedEvent e) {
         IMessage message = e.getMessage();
-        String content = message.getContent();
+        String content = message.getContent().toLowerCase();
         if (content.startsWith("!q ") || content.startsWith("!queue ")) {
             processCommand(() -> queueCommand(e));
         } else if (content.startsWith("!qx ")) {
@@ -42,17 +45,166 @@ public class StreamService {
             processCommand(() -> skipCommand(e));
         } else if (content.startsWith("!v ") || content.startsWith("!volume ")) {
             processCommand(() -> volumeCommand(e));
+        } else if (content.equals("!status")) {
+            processCommand(() -> statusCommand(e));
+        } else if (content.equals("!stop")) {
+            processCommand(() -> stopCommand(e));
+        } else if (content.equals("!pause")) {
+            processCommand(() -> pauseCommand(e, true));
+        } else if (content.equals("!resume")) {
+            processCommand(() -> pauseCommand(e, false));
+        } else if (content.startsWith("!rewindto")) {
+            processCommand(() -> rewindToCommand(e));
+        } else if (content.startsWith("!forwardto")) {
+            processCommand(() -> fastForwardToCommand(e));
+        } else if (content.startsWith("!rewind")) {
+            processCommand(() -> rewindCommand(e));
+        } else if (content.startsWith("!forward")) {
+            processCommand(() -> fastForwardCommand(e));
+        } else if (content.equals("!shuffle")) {
+            processCommand(() -> shuffleCommand(e));
+        } else if (content.equals("!loop")) {
+            processCommand(() -> toggleLoopCommand(e));
         }
+    }
+
+    private void statusCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        AudioPlayer.Track track = player.getCurrentTrack();
+        if (track != null) {
+            String source = getSource(track);
+            long total = track.getTotalTrackTime();
+            int volume = (int) (player.getVolume() * 100);
+            StringBuilder response = new StringBuilder();
+            response.append("Status: ").append(player.isPaused() ? "Paused" : "Playing").append("\n");
+            if (player.isLooping()) {
+                response.append("Looping: ");
+            } else {
+                response.append("Current: ");
+            }
+            response.append(source).append(" ")
+                .append(formatDuration(Duration.ofMillis(total))).append("\n")
+                .append("Playlist: ").append(playlistToString(player)).append("\n")
+                .append("Volume: ").append(volume);
+            sendMessage(channel, response.toString());
+        } else {
+            sendMessage(channel, "Player is " + (player.isReady() ? "" : "NOT") + " ready.");
+        }
+    }
+
+    private void stopCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        event.getClient().getConnectedVoiceChannels().stream()
+            .filter(ch -> ch.getGuild().equals(message.getGuild()))
+            .findFirst().ifPresent(IVoiceChannel::leave);
+    }
+
+    private void pauseCommand(MessageReceivedEvent event, boolean pause) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.setPaused(pause);
+        sendMessage(channel, ":ok_hand:");
+    }
+
+    private void rewindToCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        String content = message.getContent();
+        long ms = Math.max(0, parseLong(content.split(" ")[1], 5000));
+        String duration = formatHuman(Duration.ofMillis(ms), true);
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.getCurrentTrack().rewindTo(ms);
+        sendMessage(channel, ":rewind: to " + duration);
+    }
+
+    private void fastForwardToCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        String content = message.getContent();
+        long ms = Math.max(0, parseLong(content.split(" ")[1], 5000));
+        String duration = formatHuman(Duration.ofMillis(ms), true);
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.getCurrentTrack().fastForwardTo(ms);
+        sendMessage(channel, ":fast_forward: to " + duration);
+    }
+
+    private void rewindCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        String content = message.getContent();
+        long ms = Math.max(0, parseLong(content.split(" ")[1], 5000));
+        String duration = formatHuman(Duration.ofMillis(ms), true);
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.getCurrentTrack().rewind(ms);
+        sendMessage(channel, ":rewind: by " + duration);
+    }
+
+    private void fastForwardCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        String content = message.getContent();
+        long ms = Math.max(0, parseLong(content.split(" ")[1], 5000));
+        String duration = formatHuman(Duration.ofMillis(ms), true);
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.getCurrentTrack().fastForward(ms);
+        sendMessage(channel, ":fast_forward: by " + duration);
+    }
+
+    private void shuffleCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.shuffle();
+        sendMessage(channel, ":ok_hand:");
+    }
+
+    private void toggleLoopCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        if (channel.isPrivate()) {
+            return;
+        }
+        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+        player.setLoop(!player.isLooping());
+        sendMessage(channel, "Loop mode: " + (player.isLooping() ? "ON" : "OFF"));
     }
 
     private void volumeCommand(MessageReceivedEvent event) {
         IMessage message = event.getMessage();
         String content = message.getContent();
         IChannel channel = message.getChannel();
-        if (message.getChannel().isPrivate()) {
+        if (channel.isPrivate()) {
             return;
         }
-        int volume = Math.max(0, Math.min(100, parseOrDefault(content.split(" ", 2)[1], 20)));
+        int volume = Math.max(0, Math.min(100, parseInteger(content.split(" ", 2)[1], 20)));
         AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
         log.debug("Setting volume to {}% ({})", volume, volume / 100f);
         player.setVolume(volume / 100f);
@@ -123,7 +275,9 @@ public class StreamService {
         if (args.length > 3) {
             variables.put("--playlist-end", args[3]);
         }
-        Optional<IVoiceChannel> voiceChannel = message.getAuthor().getVoiceChannel();
+        Optional<IVoiceChannel> voiceChannel = message.getAuthor().getConnectedVoiceChannels()
+            .stream().filter(v -> !v.isConnected() && message.getGuild().equals(v.getGuild()))
+            .findAny();
         if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
             voiceChannel.get().join();
         }
@@ -170,7 +324,8 @@ public class StreamService {
             Process process = builder.start();
             try {
                 CompletableFuture.runAsync(() -> logStream(process.getErrorStream()));
-                audioPlayer.queue(AudioSystem.getAudioInputStream(process.getInputStream()));
+                AudioPlayer.Track track = audioPlayer.queue(AudioSystem.getAudioInputStream(process.getInputStream()));
+                track.getMetadata().put("url", id);
                 return true;
             } catch (UnsupportedAudioFileException e) {
                 log.warn("Could not queue audio", e);
@@ -198,41 +353,69 @@ public class StreamService {
     }
 
     @EventSubscriber
-    public void onAudioPlay(AudioPlayEvent event) {
-        String source = event.getFileSource().map(File::toString)
-            .orElseGet(() -> event.getUrlSource().map(URL::toString).orElse(""));
-        event.getAudioChannel().setVolume(0.2f);
-        AudioInputStream stream = event.getStream();
-        log.debug("[Play] ({}) {}", hex(stream.hashCode()), source);
+    public void onPlayerInit(AudioPlayerInitEvent event) {
+        // set the default volume - can be changed later
+        log.debug("Audio player initialized");
+        event.getPlayer().setVolume(0.2f);
+    }
+
+    private String getSource(AudioPlayer.Track track) {
+        Map<String, Object> metadata = track.getMetadata();
+        if (metadata.containsKey("file")) {
+            return ((File) metadata.get("file")).getName();
+        } else if (metadata.containsKey("url")) {
+            return metadata.get("url").toString();
+        } else {
+            return hex(track.hashCode());
+        }
     }
 
     @EventSubscriber
-    public void onAudioStop(AudioStopEvent event) {
-        String source = event.getFileSource().map(File::toString)
-            .orElseGet(() -> event.getUrlSource().map(URL::toString).orElse(""));
-        AudioInputStream stream = event.getStream();
-        log.debug("[Stop] ({}) {}", hex(stream.hashCode()), source);
+    public void onTrackStart(TrackStartEvent event) {
+        log.debug("[Started] {}", getSource(event.getTrack()));
     }
 
     @EventSubscriber
-    public void onAudioEnqueue(AudioQueuedEvent event) {
-        String source = event.getFileSource().map(File::toString)
-            .orElseGet(() -> event.getUrlSource().map(URL::toString).orElse(""));
-        AudioInputStream stream = event.getStream();
-        log.debug("[Enqueue] ({}) {}", hex(stream.hashCode()), source);
+    public void onTrackEnqueue(TrackQueueEvent event) {
+        log.debug("[Enqueued] {}", getSource(event.getTrack()));
     }
 
     @EventSubscriber
-    public void onAudioDequeue(AudioUnqueuedEvent event) {
-        String source = event.getFileSource().map(File::toString)
-            .orElseGet(() -> event.getUrlSource().map(URL::toString).orElse(""));
-        AudioInputStream stream = event.getStream();
-        log.debug("[Dequeue] ({}) {}", hex(stream.hashCode()), source);
-        try {
-            stream.close();
-            log.debug("Stream {} was closed", hex(stream.hashCode()));
-        } catch (IOException e) {
-            log.warn("Could not close audio stream", e);
+    public void onTrackFinish(TrackFinishEvent event) {
+        log.debug("[Finished] {}", getSource(event.getOldTrack()));
+    }
+
+    @EventSubscriber
+    public void onSkip(SkipEvent event) {
+        log.debug("[Skipped] {}", getSource(event.getTrack()));
+    }
+
+    @EventSubscriber
+    public void onVolumeChange(VolumeChangeEvent event) {
+        log.debug("[Volume] {} -> {}", (int) (event.getOldValue() * 100), (int) (event.getNewValue() * 100));
+    }
+
+    @EventSubscriber
+    public void onPause(PauseStateChangeEvent event) {
+        if (event.getNewPauseState()) {
+            log.debug("[Pausing]", getSource(event.getPlayer().getCurrentTrack()));
+        } else {
+            log.debug("[Resuming]", getSource(event.getPlayer().getCurrentTrack()));
+        }
+    }
+
+    @EventSubscriber
+    public void onShuffle(ShuffleEvent event) {
+        log.debug("Shuffling {} tracks. Current playlist: {}", event.getPlayer().playlistSize(),
+            playlistToString(event.getPlayer()));
+    }
+
+    @EventSubscriber
+    public void onLoop(LoopStateChangeEvent event) {
+        if (event.getNewLoopState()) {
+            log.debug("[Loop Enabled]", getSource(event.getPlayer().getCurrentTrack()));
+        } else {
+            log.debug("[Loop Disabled]", getSource(event.getPlayer().getCurrentTrack()));
         }
     }
 
@@ -240,9 +423,22 @@ public class StreamService {
         return Integer.toHexString(number);
     }
 
-    private int parseOrDefault(String input, int defaultValue) {
+    private String playlistToString(AudioPlayer player) {
+        return player.getPlaylist().stream().map(this::getSource).collect(Collectors.joining(", "));
+    }
+
+    private int parseInteger(String input, int defaultValue) {
         try {
             return Integer.parseInt(input);
+        } catch (NumberFormatException e) {
+            log.warn("Attempted to parse non-numeric value: {}", e.toString());
+            return defaultValue;
+        }
+    }
+
+    private long parseLong(String input, int defaultValue) {
+        try {
+            return Long.parseLong(input);
         } catch (NumberFormatException e) {
             log.warn("Attempted to parse non-numeric value: {}", e.toString());
             return defaultValue;

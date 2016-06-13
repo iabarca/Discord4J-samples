@@ -8,14 +8,30 @@ import sx.blah.discord.util.DiscordException;
 import sx.blah.discord.util.MissingPermissionsException;
 import sx.blah.discord.util.RequestBuffer;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public class DiscordUtil {
 
     private static final Logger log = LoggerFactory.getLogger(DiscordUtil.class);
+    private static final int LENGTH_LIMIT = 2000;
 
     public static RequestBuffer.RequestFuture<IMessage> sendMessage(final IChannel channel, final String content) {
+        RequestBuffer.RequestFuture<IMessage> response = null;
+        if (content.length() > LENGTH_LIMIT) {
+            SplitMessage splitMessage = new SplitMessage(content);
+            List<String> splits = splitMessage.split(LENGTH_LIMIT);
+            for (String split : splits) {
+                response = sendMessage0(channel, split);
+            }
+        } else {
+            response = sendMessage0(channel, content);
+        }
+        return response;
+    }
+
+    private static RequestBuffer.RequestFuture<IMessage> sendMessage0(final IChannel channel, final String content) {
         return RequestBuffer.request(() -> {
             try {
                 return channel.sendMessage(content);
