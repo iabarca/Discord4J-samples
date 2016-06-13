@@ -241,7 +241,7 @@ public class StreamService {
             return;
         }
         Optional<IVoiceChannel> voiceChannel = message.getAuthor().getConnectedVoiceChannels()
-            .stream().filter(v -> !v.isConnected() && message.getGuild().equals(v.getGuild()))
+            .stream().filter(v -> message.getGuild().equals(v.getGuild()))
             .findAny();
         if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
             voiceChannel.get().join();
