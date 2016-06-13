@@ -53,13 +53,13 @@ public class StreamService {
             processCommand(() -> pauseCommand(e, true));
         } else if (content.equals("!resume")) {
             processCommand(() -> pauseCommand(e, false));
-        } else if (content.startsWith("!rewindto")) {
+        } else if (content.startsWith("!rewindto ")) {
             processCommand(() -> rewindToCommand(e));
-        } else if (content.startsWith("!forwardto")) {
+        } else if (content.startsWith("!forwardto ")) {
             processCommand(() -> fastForwardToCommand(e));
-        } else if (content.startsWith("!rewind")) {
+        } else if (content.startsWith("!rewind ")) {
             processCommand(() -> rewindCommand(e));
-        } else if (content.startsWith("!forward")) {
+        } else if (content.startsWith("!forward ")) {
             processCommand(() -> fastForwardCommand(e));
         } else if (content.equals("!shuffle")) {
             processCommand(() -> shuffleCommand(e));
@@ -81,19 +81,27 @@ public class StreamService {
             long total = track.getTotalTrackTime();
             int volume = (int) (player.getVolume() * 100);
             StringBuilder response = new StringBuilder();
-            response.append("Status: ").append(player.isPaused() ? "Paused" : "Playing").append("\n");
+            response.append("Status: ").append(player.isPaused() ? "**Paused**" : "**Playing**").append("\n");
             if (player.isLooping()) {
                 response.append("Looping: ");
             } else {
                 response.append("Current: ");
             }
             response.append(source).append(" ")
-                .append(formatDuration(Duration.ofMillis(total))).append("\n")
+                .append(prettyDuration(total)).append("\n")
                 .append("Playlist: ").append(playlistToString(player)).append("\n")
                 .append("Volume: ").append(volume);
             sendMessage(channel, response.toString());
         } else {
             sendMessage(channel, "Player is " + (player.isReady() ? "" : "NOT") + " ready.");
+        }
+    }
+
+    private String prettyDuration(long millis) {
+        if (millis >= 0) {
+            return "[" + formatDuration(Duration.ofMillis(millis)) + "]";
+        } else {
+            return "";
         }
     }
 
