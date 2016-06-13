@@ -368,6 +368,9 @@ public class StreamService {
     }
 
     private String getSource(AudioPlayer.Track track) {
+        if (track == null) {
+            return "";
+        }
         Map<String, Object> metadata = track.getMetadata();
         if (metadata.containsKey("file")) {
             return ((File) metadata.get("file")).getName();
