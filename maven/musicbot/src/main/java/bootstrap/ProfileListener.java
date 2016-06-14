@@ -7,8 +7,8 @@ import sx.blah.discord.api.events.EventSubscriber;
 import sx.blah.discord.handle.impl.events.MessageReceivedEvent;
 import sx.blah.discord.handle.obj.IMessage;
 import sx.blah.discord.util.DiscordException;
-import sx.blah.discord.util.HTTP429Exception;
 import sx.blah.discord.util.Image;
+import sx.blah.discord.util.RateLimitException;
 
 import static util.DiscordUtil.processCommand;
 
@@ -38,7 +38,7 @@ public class ProfileListener {
     private void changeAvatar(IDiscordClient client, Image image) {
         try {
             client.changeAvatar(image);
-        } catch (DiscordException | HTTP429Exception e) {
+        } catch (DiscordException | RateLimitException e) {
             log.warn("Could not change avatar", e);
         }
     }

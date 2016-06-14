@@ -9,7 +9,7 @@ import sx.blah.discord.api.events.EventSubscriber;
 import sx.blah.discord.handle.impl.events.DiscordDisconnectedEvent;
 import sx.blah.discord.handle.impl.events.ReadyEvent;
 import sx.blah.discord.util.DiscordException;
-import sx.blah.discord.util.HTTP429Exception;
+import sx.blah.discord.util.RateLimitException;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -49,7 +49,11 @@ public class Instance {
         if (client != null) {
             client.login();
         } else {
-            client = newClientBuilder().login();
+            client = newClientBuilder()
+                .withPingTimeout(50)
+                .withTimeout(30000)
+                .withReconnects()
+                .login();
             log.debug("Registering Discord event listeners");
             client.getDispatcher().registerListener(this);
             client.getDispatcher().registerListener(new StreamService());
@@ -93,7 +97,7 @@ public class Instance {
         reconnect.set(false);
         try {
             client.logout();
-        } catch (HTTP429Exception | DiscordException e) {
+        } catch (RateLimitException | DiscordException e) {
             log.warn("Logout failed", e);
         }
         exitLatch.countDown();
