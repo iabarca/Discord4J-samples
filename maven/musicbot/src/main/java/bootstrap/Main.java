@@ -21,10 +21,11 @@ public class Main {
         } catch (IOException e) {
             log.warn("Could not load properties from file: {}", e.toString());
         }
-        if (args.length == 0 && !properties.containsKey("token")) {
-            throw new IllegalArgumentException("Please enter token as argument");
-        } else {
+        if (args.length > 0) {
             properties.setProperty("token", args[0]);
+        }
+        if (!properties.containsKey("token")) {
+            throw new IllegalArgumentException("Enter token as argument or include it into " + CONFIG_FILE);
         }
         try {
             Instance bot = new Instance(properties);
