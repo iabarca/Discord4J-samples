@@ -8,6 +8,7 @@ import sx.blah.discord.handle.obj.IChannel;
 import sx.blah.discord.handle.obj.IMessage;
 import sx.blah.discord.handle.obj.IUser;
 import sx.blah.discord.handle.obj.IVoiceChannel;
+import sx.blah.discord.util.MissingPermissionsException;
 import sx.blah.discord.util.audio.AudioPlayer;
 import sx.blah.discord.util.audio.events.*;
 
@@ -243,22 +244,21 @@ public class StreamService {
         Optional<IVoiceChannel> voiceChannel = message.getAuthor().getConnectedVoiceChannels()
             .stream().filter(v -> message.getGuild().equals(v.getGuild()))
             .findAny();
-        if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
-            voiceChannel.get().join();
-        }
-        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
-        Optional<String> id = extractVideoId(url);
-        if (id.isPresent()) {
-            log.debug("Preparing to queue video ID: {}", id.get());
-            if (queueFromYouTube(player, id.get(), null)) {
-                IUser user = message.getAuthor();
-                sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
+        if (tryJoin(voiceChannel, message)) {
+            AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+            Optional<String> id = extractVideoId(url);
+            if (id.isPresent()) {
+                log.debug("Preparing to queue video ID: {}", id.get());
+                if (queueFromYouTube(player, id.get(), null)) {
+                    IUser user = message.getAuthor();
+                    sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
+                    deleteMessage(message);
+                }
+            } else {
+                log.debug("Could not extract valid ID from URL: {}", url);
+                sendMessage(channel, "Nothing to queue, something happened");
                 deleteMessage(message);
             }
-        } else {
-            log.debug("Could not extract valid ID from URL: {}", url);
-            sendMessage(channel, "Nothing to queue, something happened");
-            deleteMessage(message);
         }
     }
 
@@ -286,15 +286,30 @@ public class StreamService {
         Optional<IVoiceChannel> voiceChannel = message.getAuthor().getConnectedVoiceChannels()
             .stream().filter(v -> !v.isConnected() && message.getGuild().equals(v.getGuild()))
             .findAny();
-        if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
-            voiceChannel.get().join();
+        if (tryJoin(voiceChannel, message)) {
+            AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
+            log.debug("Preparing to process URL into queue: {}", url);
+            if (queueFromYouTube(player, url, variables)) {
+                IUser user = message.getAuthor();
+                sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
+                deleteMessage(message);
+            }
         }
-        AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
-        log.debug("Preparing to process URL into queue: {}", url);
-        if (queueFromYouTube(player, url, variables)) {
-            IUser user = message.getAuthor();
-            sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
-            deleteMessage(message);
+    }
+
+    private boolean tryJoin(Optional<IVoiceChannel> voiceChannel, IMessage message) {
+        if (voiceChannel.isPresent() && !voiceChannel.get().isConnected()) {
+            try {
+                voiceChannel.get().join();
+                return true;
+            } catch (MissingPermissionsException e) {
+                log.debug("Missing permissions to join voice channel");
+                sendMessage(message.getChannel(), "Unable to join voice channel");
+                deleteMessage(message);
+                return false;
+            }
+        } else {
+            return true;
         }
     }
 
