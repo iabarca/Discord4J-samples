@@ -11,37 +11,38 @@ import sx.blah.discord.handle.impl.events.ReadyEvent;
 import sx.blah.discord.util.DiscordException;
 import sx.blah.discord.util.RateLimitException;
 
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static util.PropertiesUtil.getBoolean;
+import static util.PropertiesUtil.getInteger;
+import static util.PropertiesUtil.getLong;
 
 public class Instance {
 
     private static final Logger log = LoggerFactory.getLogger(Instance.class);
 
     private volatile IDiscordClient client;
-    private String email;
-    private String password;
-    private String token;
+    private final Properties properties;
     private final AtomicBoolean reconnect = new AtomicBoolean(true);
     private final CountDownLatch exitLatch = new CountDownLatch(1);
 
-    public Instance(String email, String password) {
-        this.email = email;
-        this.password = password;
-    }
-
-    public Instance(String token) {
-        this.token = token;
+    public Instance(Properties properties) {
+        this.properties = properties;
     }
 
     private ClientBuilder newClientBuilder() {
-        if (token == null) {
-            return new ClientBuilder().withLogin(email, password);
-        } else {
-            return new ClientBuilder().withToken(token);
+        ClientBuilder builder = new ClientBuilder()
+            .withToken(properties.getProperty("token"))
+            .withPingTimeout(getInteger(properties, "max-missed-pings", 50))
+            .withTimeout(getLong(properties, "timeout", 30000));
+        if (getBoolean(properties, "reconnect", true)) {
+            builder.withReconnects();
         }
+        return builder;
     }
 
     public void login() throws DiscordException, InterruptedException {
@@ -49,11 +50,7 @@ public class Instance {
         if (client != null) {
             client.login();
         } else {
-            client = newClientBuilder()
-                .withPingTimeout(50)
-                .withTimeout(30000)
-                .withReconnects()
-                .login();
+            client = newClientBuilder().login();
             log.debug("Registering Discord event listeners");
             client.getDispatcher().registerListener(this);
             client.getDispatcher().registerListener(new StreamService());
@@ -103,20 +100,8 @@ public class Instance {
         exitLatch.countDown();
     }
 
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
+    public Properties getProperties() {
+        return properties;
     }
 
     public CountDownLatch getExitLatch() {

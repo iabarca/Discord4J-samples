@@ -4,20 +4,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sx.blah.discord.util.DiscordException;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Properties;
+
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
+    private static final String CONFIG_FILE = "bot.properties";
 
     public static void main(String[] args) {
-        Instance bot;
-        if (args.length == 0) {
-            throw new IllegalArgumentException("Please enter email and password OR a token as arguments");
-        } else if (args.length == 1) {
-            bot = new Instance(args[0]);
+        Properties properties = new Properties();
+        try {
+            properties.load(Files.newInputStream(Paths.get(CONFIG_FILE)));
+        } catch (IOException e) {
+            log.warn("Could not load properties from file: {}", e.toString());
+        }
+        if (args.length == 0 && !properties.containsKey("token")) {
+            throw new IllegalArgumentException("Please enter token as argument");
         } else {
-            bot = new Instance(args[0], args[1]);
+            properties.setProperty("token", args[0]);
         }
         try {
+            Instance bot = new Instance(properties);
             bot.login();
             bot.getExitLatch().await();
         } catch (DiscordException e) {
