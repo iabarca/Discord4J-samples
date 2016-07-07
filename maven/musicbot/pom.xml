@@ -30,7 +30,7 @@
         <dependency>
             <groupId>com.github.austinv11</groupId>
             <artifactId>Discord4J</artifactId>
-            <version>4677839</version>
+            <version>cbc8f21</version>
         </dependency>
         <!-- Allows you to log events from Discord4J -->
         <dependency>
