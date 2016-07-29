@@ -1,5 +1,6 @@
 package audio;
 
+import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sx.blah.discord.api.events.EventSubscriber;
@@ -16,6 +17,8 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.io.*;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -33,6 +36,7 @@ public class StreamService {
 
     private static final Logger log = LoggerFactory.getLogger(StreamService.class);
     private static final Pattern YOUTUBE_URL = Pattern.compile("(?:https?://)?(?:(?:(?:www\\.?)?youtube\\.com(?:/(?:(?:watch\\?.*?(v=[^&\\s]+).*)|(?:v(/.*))|(channel/.+)|(?:user/(.+))|(?:results\\?(search_query=.+))))?)|(?:youtu\\.be(/.*)?))");
+    private static final Gson GSON = new Gson();
 
     @EventSubscriber
     public void onMessage(MessageReceivedEvent e) {
@@ -251,7 +255,15 @@ public class StreamService {
                 log.debug("Preparing to queue video ID: {}", id.get());
                 if (queueFromYouTube(player, id.get(), null)) {
                     IUser user = message.getAuthor();
-                    sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added " + id.get() + " to the playlist");
+                    Optional<Metadata> metadata = getMetadataFromId(url);
+                    if (metadata.isPresent()) {
+                        Metadata m = metadata.get();
+                        String title = m.getTitle();
+                        String duration = formatDuration(Duration.ofSeconds(m.getDuration()));
+                        sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added **" + title + "** [" + duration + "]");
+                    } else {
+                        sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added `" + id.get() + "` to the playlist");
+                    }
                     deleteMessage(message);
                 }
             } else {
@@ -291,7 +303,15 @@ public class StreamService {
             log.debug("Preparing to process URL into queue: {}", url);
             if (queueFromYouTube(player, url, variables)) {
                 IUser user = message.getAuthor();
-                sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added to the playlist: <" + url + ">");
+                Optional<Metadata> metadata = getMetadataFromId(url);
+                if (metadata.isPresent()) {
+                    Metadata m = metadata.get();
+                    String title = m.getTitle();
+                    String duration = formatDuration(Duration.ofSeconds(m.getDuration()));
+                    sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added **" + title + "** [" + duration + "]");
+                } else {
+                    sendMessage(channel, user.getName() + "#" + user.getDiscriminator() + " added <" + url + ">");
+                }
                 deleteMessage(message);
             }
         }
@@ -332,9 +352,9 @@ public class StreamService {
 
     private boolean queueFromYouTube(AudioPlayer audioPlayer, String id, Map<String, String> variables) {
         String name = System.getProperty("os.name").contains("Windows") ? "youtube-dl.exe" : "youtube-dl";
-        ProcessBuilder builder = new ProcessBuilder(name, "-q", "-f", "worstaudio",
+        ProcessBuilder builder = new ProcessBuilder(name, "--write-info-json", "-f", "worstaudio",
             "--exec", "ffmpeg -hide_banner -nostats -loglevel panic -y -i {} -vn -q:a 5 -f mp3 pipe:1", "-o",
-            "%(id)s");
+            "%(id)s.%(ext)s");
         if (variables != null) {
             for (Map.Entry<String, String> entry : variables.entrySet()) {
                 builder.command().add(entry.getKey());
@@ -349,6 +369,15 @@ public class StreamService {
                 CompletableFuture.runAsync(() -> logStream(process.getErrorStream()));
                 AudioPlayer.Track track = audioPlayer.queue(AudioSystem.getAudioInputStream(process.getInputStream()));
                 track.getMetadata().put("url", id);
+                Optional<Metadata> metadata = getMetadataFromId(id);
+                metadata.ifPresent(m -> {
+                    String title = m.getTitle();
+                    String duration = formatDuration(Duration.ofSeconds(m.getDuration()));
+                    track.getMetadata().put("title", title);
+                    track.getMetadata().put("duration", duration);
+                    track.getMetadata().put("webpage_url", m.getWebpageUrl());
+                    log.info("Queued [{}] \"{}\" ({})", id, title, duration);
+                });
                 return true;
             } catch (UnsupportedAudioFileException e) {
                 log.warn("Could not queue audio", e);
@@ -358,6 +387,16 @@ public class StreamService {
             log.warn("Could not start process", e);
         }
         return false;
+    }
+
+    private Optional<Metadata> getMetadataFromId(String id) {
+        try (Reader reader = Files.newBufferedReader(Paths.get(id + ".info.json"))) {
+            Metadata metadata = GSON.fromJson(reader, Metadata.class);
+            return Optional.of(metadata);
+        } catch (IOException e) {
+            log.warn("Could not get video metadata: {}", e.toString());
+        }
+        return Optional.empty();
     }
 
     private BufferedReader newProcessReader(InputStream stream) {
@@ -390,6 +429,10 @@ public class StreamService {
         if (metadata.containsKey("file")) {
             return ((File) metadata.get("file")).getName();
         } else if (metadata.containsKey("url")) {
+            if (metadata.containsKey("title")) {
+                return String.format("`%s` %s [%s]", metadata.get("url").toString(),
+                    metadata.get("title").toString(), metadata.get("duration").toString());
+            }
             return metadata.get("url").toString();
         } else {
             return hex(track.hashCode());
@@ -412,7 +455,7 @@ public class StreamService {
     }
 
     @EventSubscriber
-    public void onSkip(SkipEvent event) {
+    public void onSkip(TrackSkipEvent event) {
         log.debug("[Skipped] {}", getSource(event.getTrack()));
     }
 
@@ -432,7 +475,7 @@ public class StreamService {
 
     @EventSubscriber
     public void onShuffle(ShuffleEvent event) {
-        log.debug("Shuffling {} tracks. Current playlist: {}", event.getPlayer().playlistSize(),
+        log.debug("Shuffling {} tracks. Current playlist: {}", event.getPlayer().getPlaylistSize(),
             playlistToString(event.getPlayer()));
     }
 

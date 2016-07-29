@@ -1,5 +1,9 @@
 modules
 bot.properties
+youtube-dl.exe
+*.webm
+*.m4a
+*.info.json
 
 ######################
 # Eclipse

@@ -6,7 +6,7 @@
 
     <groupId>quantic</groupId>
     <artifactId>musicbot</artifactId>
-    <version>1.4.2</version>
+    <version>1.5.0</version>
 
     <properties>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -43,6 +43,11 @@
             <groupId>org.codehaus.janino</groupId>
             <artifactId>janino</artifactId>
             <version>2.7.8</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.7</version>
         </dependency>
     </dependencies>
 
