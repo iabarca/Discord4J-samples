@@ -92,19 +92,16 @@ public class StreamService {
             long total = track.getTotalTrackTime();
             int volume = (int) (player.getVolume() * 100);
             StringBuilder response = new StringBuilder();
-            response.append("Status: ").append(player.isPaused() ? "**Paused**" : "**Playing**").append("\n\n");
+            response.append(player.isPaused() ? "**Paused:** " : "**Playing:** ")
+                .append(source).append(" ").append(prettyDuration(total, metadata));
             if (player.isLooping()) {
-                response.append("Looping: ");
-            } else {
-                response.append("Current: ");
+                response.append(" [Looping]");
             }
-            response.append(source).append(" ")
-                .append(prettyDuration(total, metadata)).append("\n")
-                .append("Playlist:\n").append(playlistToString(player)).append("\n")
-                .append("Volume: ").append(volume);
+            response.append("\n**Volume:** ").append(volume).append("\n")
+                .append("**Playlist:**\n\n").append(playlistToString(player)).append("\n");
             sendMessage(channel, response.toString());
         } else {
-            sendMessage(channel, "Player is " + (player.isReady() ? "" : "NOT") + " ready.");
+            sendMessage(channel, "Playlist is empty");
         }
     }
 
