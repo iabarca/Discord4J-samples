@@ -70,7 +70,16 @@ public class StreamService {
             processCommand(() -> shuffleCommand(e));
         } else if (content.equals("!loop")) {
             processCommand(() -> toggleLoopCommand(e));
+        } else if (content.equals("!help")) {
+            processCommand(() -> helpCommand(e));
         }
+    }
+
+    private void helpCommand(MessageReceivedEvent event) {
+        IMessage message = event.getMessage();
+        IChannel channel = message.getChannel();
+        sendMessage(channel, "Commands: !q, !queue, !s, !skip, !v, !volume, !status, !stop, !pause, !resume, " +
+            "!rewindto, !forwardto, !rewind, !forward, !shuffle, !loop");
     }
 
     private void statusCommand(MessageReceivedEvent event) {
