@@ -82,19 +82,25 @@ public class StreamService {
         AudioPlayer player = AudioPlayer.getAudioPlayerForGuild(message.getGuild());
         AudioPlayer.Track track = player.getCurrentTrack();
         if (track != null) {
-            String source = getSource(track);
+            String source;
+            Map<String, Object> metadata = track.getMetadata();
+            if (metadata.containsKey("title")) {
+                source = String.format("`%s` %s", metadata.get("url").toString(), metadata.get("title").toString());
+            } else {
+                source = getSource(track);
+            }
             long total = track.getTotalTrackTime();
             int volume = (int) (player.getVolume() * 100);
             StringBuilder response = new StringBuilder();
-            response.append("Status: ").append(player.isPaused() ? "**Paused**" : "**Playing**").append("\n");
+            response.append("Status: ").append(player.isPaused() ? "**Paused**" : "**Playing**").append("\n\n");
             if (player.isLooping()) {
                 response.append("Looping: ");
             } else {
                 response.append("Current: ");
             }
             response.append(source).append(" ")
-                .append(prettyDuration(total)).append("\n")
-                .append("Playlist: ").append(playlistToString(player)).append("\n")
+                .append(prettyDuration(total, metadata)).append("\n")
+                .append("Playlist:\n").append(playlistToString(player)).append("\n")
                 .append("Volume: ").append(volume);
             sendMessage(channel, response.toString());
         } else {
@@ -102,9 +108,15 @@ public class StreamService {
         }
     }
 
-    private String prettyDuration(long millis) {
+    private String prettyDuration(long millis, Map<String, Object> metadata) {
         if (millis >= 0) {
-            return "[" + formatDuration(Duration.ofMillis(millis)) + "]";
+            if (metadata.containsKey("duration")) {
+                return "[" + formatDuration(Duration.ofMillis(millis)) + "/" + metadata.get("duration").toString() + "]";
+            } else {
+                return "[" + formatDuration(Duration.ofMillis(millis)) + "]";
+            }
+        } else if (metadata.containsKey("duration")) {
+            return "[?/" + metadata.get("duration").toString() + "]";
         } else {
             return "";
         }
@@ -255,7 +267,7 @@ public class StreamService {
                 log.debug("Preparing to queue video ID: {}", id.get());
                 if (queueFromYouTube(player, id.get(), null)) {
                     IUser user = message.getAuthor();
-                    Optional<Metadata> metadata = getMetadataFromId(url);
+                    Optional<Metadata> metadata = getMetadataFromId(id.get());
                     if (metadata.isPresent()) {
                         Metadata m = metadata.get();
                         String title = m.getTitle();
@@ -493,7 +505,7 @@ public class StreamService {
     }
 
     private String playlistToString(AudioPlayer player) {
-        return player.getPlaylist().stream().map(this::getSource).collect(Collectors.joining(", "));
+        return player.getPlaylist().stream().map(this::getSource).collect(Collectors.joining("\n"));
     }
 
     private int parseInteger(String input, int defaultValue) {
