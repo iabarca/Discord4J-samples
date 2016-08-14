@@ -473,7 +473,7 @@ public class StreamService {
     }
 
     @EventSubscriber
-    public void onSkip(TrackSkipEvent event) {
+    public void onTrackSkip(TrackSkipEvent event) {
         log.debug("[Skipped] {}", getSource(event.getTrack()));
     }
 
