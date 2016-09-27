@@ -17,7 +17,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static util.PropertiesUtil.getBoolean;
 import static util.PropertiesUtil.getInteger;
 import static util.PropertiesUtil.getLong;
 
@@ -39,9 +38,9 @@ public class Instance {
             .withToken(properties.getProperty("token"))
             .withPingTimeout(getInteger(properties, "max-missed-pings", 50))
             .withTimeout(getLong(properties, "timeout", 30000));
-        if (getBoolean(properties, "reconnect", true)) {
-            builder.withReconnects();
-        }
+//        if (getBoolean(properties, "reconnect", true)) {
+//            builder.withReconnects();
+//        }
         return builder;
     }
 
