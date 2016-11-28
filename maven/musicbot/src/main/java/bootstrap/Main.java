@@ -3,6 +3,7 @@ package bootstrap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sx.blah.discord.util.DiscordException;
+import sx.blah.discord.util.RateLimitException;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,7 +32,7 @@ public class Main {
             Instance bot = new Instance(properties);
             bot.login();
             bot.getExitLatch().await();
-        } catch (DiscordException e) {
+        } catch (DiscordException | RateLimitException e) {
             log.warn("Could not start Discord bot", e);
         } catch (InterruptedException e) {
             log.warn("Interrupted while waiting for exit", e);
