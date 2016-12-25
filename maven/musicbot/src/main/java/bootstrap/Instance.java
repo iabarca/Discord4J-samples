@@ -15,7 +15,6 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 import static util.PropertiesUtil.getInteger;
-import static util.PropertiesUtil.getLong;
 
 public class Instance {
 
@@ -33,7 +32,6 @@ public class Instance {
         ClientBuilder builder = new ClientBuilder()
             .withToken(properties.getProperty("token"))
             .withPingTimeout(getInteger(properties, "max-missed-pings", 50))
-            .withTimeout(getLong(properties, "timeout", 30000))
             .setMaxReconnectAttempts(getInteger(properties, "max-reconnect-attempts", 10));
         return builder;
     }
